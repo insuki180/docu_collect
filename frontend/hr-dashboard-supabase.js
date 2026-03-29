@@ -174,12 +174,13 @@
         resume_storage_path,
         status,
         applied_at,
+        created_at,
         current_ctc,
         expected_ctc,
         notice_period
       `, { count: "exact" })
       .eq("tenant_id", TENANT_ID)
-      .order("applied_at", { ascending: false });
+      .order("created_at", { ascending: false });
 
     if (searchTerm) {
       const escaped = searchTerm.replace(/[%_,]/g, "");
@@ -251,6 +252,7 @@
         resume_url: resumeUrl,
         status: toUiStatus(row.status),
         applied_at: row.applied_at || "",
+        created_at: row.created_at || "",
         applied_date: formatDisplayDate(row.applied_at),
         other_docs: otherDocLinks.join(","),
         current_ctc: formatCtc(row.current_ctc),
