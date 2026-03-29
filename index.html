@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>DocCollect HR</title>
+<script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<style>
+:root {
+  --primary-color: #2563eb;
+  --primary-hover: #1d4ed8;
+  --success-color: #10b981;
+  --bg: #f4f6f8;
+  --card: #ffffff;
+  --text: #1f2937;
+  --muted: #6b7280;
+  --border: #e5e7eb;
+  --ring: rgba(37, 99, 235, 0.2);
+}
+
+body {
+  margin: 0;
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  padding: 20px 15px;
+  color: var(--text);
+}
+
+.container {
+  max-width: 600px;
+  margin: auto;
+  background: var(--card);
+  padding: 35px;
+  border-radius: 20px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+  animation: fadeIn 0.4s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.header {
+  text-align: center;
+  margin-bottom: 30px;
+}
+
+.header img {
+  max-height: 65px;
+  margin-bottom: 12px;
+  border-radius: 8px;
+}
+
+.header h1 {
+  margin: 0 0 5px 0;
+  font-size: 24px;
+  color: var(--text);
+}
+
+.header p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 15px;
+}
+
+.section-title {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  font-weight: 700;
+  color: var(--primary-color);
+  margin: 30px 0 15px;
+  border-bottom: 2px solid var(--bg);
+  padding-bottom: 8px;
+}
+
+label {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  margin-top: 18px;
+  margin-bottom: 8px;
+  color: var(--text);
+}
+
+input[type="text"],
+input[type="tel"],
+input[type="email"],
+select {
+  width: 100%;
+  padding: 14px 16px;
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  font-size: 15px;
+  box-sizing: border-box;
+  background-color: #fafafa;
+  transition: all 0.2s ease;
+  color: var(--text);
+}
+
+input:focus,
+select:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  background-color: #fff;
+  box-shadow: 0 0 0 4px var(--ring);
+}
+
+input:disabled {
+  background-color: var(--bg);
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+.flex-row {
+  display: flex;
+  gap: 15px;
+}
+.flex-row > div {
+  flex: 1;
+}
+
+/* File Upload Enhancements */
+.upload-input {
+  display: none;
+}
+
+.upload-label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 25px 20px;
+  border: 2px dashed var(--border);
+  border-radius: 14px;
+  background: #fafafa;
+  text-align: center;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--muted);
+  transition: all 0.2s ease;
+  margin-top: 5px;
+}
+
+.upload-label:hover {
+  background: #f0f4f8;
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+}
+
+.upload-label.has-file {
+  background: #ecfdf5;
+  border-color: var(--success-color);
+  color: #065f46;
+  border-style: solid;
+}
+
+/* Dynamic File List Display */
+.file-list {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.file-item {
+  background: #f3f4f6;
+  padding: 12px 16px;
+  border-radius: 10px;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  animation: fadeIn 0.3s ease-out;
+  border: 1px solid var(--border);
+}
+
+.file-item.success {
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+  color: #065f46;
+}
+
+/* Smooth Transition for Fresher Toggle */
+#professionalSection {
+  transition: opacity 0.3s ease;
+}
+
+/* Submit Button & Loading State */
+.submit-btn {
+  margin-top: 35px;
+  width: 100%;
+  padding: 16px;
+  background: var(--primary-color);
+  color: #fff;
+  border: none;
+  border-radius: 14px;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.submit-btn:hover:not(:disabled) {
+  background: var(--primary-hover);
+}
+
+.submit-btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+/* Grays out when disabled */
+.submit-btn:disabled {
+  background: #9ca3af !important;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
+
+/* Spinner Animation */
+.spinner {
+  border: 3px solid rgba(255,255,255,0.3);
+  border-top: 3px solid #ffffff;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  animation: spin 1s linear infinite;
+  display: none; /* Hidden by default */
+  margin-right: 10px;
+}
+
+.submit-btn.loading .spinner {
+  display: block; /* Shows spinner when loading class is active */
+}
+
+@keyframes spin { 
+  0% { transform: rotate(0deg); } 
+  100% { transform: rotate(360deg); } 
+}
+
+/* Success Screen */
+#successState {
+  display: none;
+  text-align: center;
+  padding: 40px 20px;
+  animation: fadeIn 0.5s ease-out;
+}
+
+#successState h2 {
+  color: var(--success-color);
+  margin-bottom: 12px;
+  font-size: 26px;
+}
+
+#successState p {
+  color: var(--text);
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.success-icon {
+  font-size: 55px;
+  margin-bottom: 20px;
+}
+
+.footer {
+  text-align: center;
+  margin-top: 25px;
+  font-size: 13px;
+  color: #9ca3af;
+  font-weight: 500;
+}
+
+/* Mobile Responsiveness */
+@media (max-width: 480px) {
+  .container {
+    padding: 25px 20px;
+    border-radius: 16px;
+  }
+  .flex-row {
+    flex-direction: column;
+    gap: 0;
+  }
+  .header h1 {
+    font-size: 20px;
+  }
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<div class="header">
+<div id="brandLogo"></div>
+<h1 id="companyName">Loading...</h1>
+<p id="formTitle">Please wait</p>
+</div>
+
+<form id="docCollectForm">
+
+<div class="section-title">Personal Details</div>
+
+<label>Full Name *</label>
+<input type="text" name="name" placeholder="John Doe" required>
+
+<label>Mobile Number *</label>
+<input type="tel" name="phone" placeholder="+1 (555) 000-0000" required>
+
+<label>Email *</label>
+<input type="email" name="email" placeholder="john@example.com" required>
+
+<div class="section-title">Job & Experience</div>
+
+<div id="jobContainer"></div>
+
+<label>Years of Experience *</label>
+
+<select id="experience" name="experience" required onchange="handleExperienceChange()">
+  <option value="">Select</option>
+  <option value="Fresher">Fresher</option>
+  <option value="0-2">0–2 Years</option>
+  <option value="Above 2">Above 2 Years</option>
+</select>
+
+<input 
+  type="number" 
+  id="experienceCustom" 
+  placeholder="Enter exact years (e.g. 3 or 4.5)" 
+  min="2.1"
+  step="0.1"
+  style="display:none; margin-top:10px;"
+>
+<label>Current Location *</label>
+<input type="text" name="location" placeholder="City, State" required>
+
+<div id="professionalSection">
+
+<div class="section-title">Professional Details</div>
+
+<div class="flex-row">
+<div>
+<label>Current CTC</label>
+<input type="text" name="current_ctc" placeholder="e.g. 5 LPA">
+</div>
+
+<div>
+<label>Expected CTC</label>
+<input type="text" name="expected_ctc" placeholder="e.g. 7 LPA">
+</div>
+</div>
+
+<label>Notice Period</label>
+<select name="notice_period">
+<option value="">Select</option>
+<option>Immediate</option>
+<option>15 Days</option>
+<option>30 Days</option>
+<option>60 Days</option>
+<option>90 Days</option>
+</select>
+
+</div>
+
+<div class="section-title">Documents</div>
+
+<label>Resume *</label>
+<input type="file" id="resumeFile" class="upload-input" accept="application/pdf" required>
+<label for="resumeFile" id="resumeLabel" class="upload-label">
+  <span id="resumeText">Click to Select Resume (PDF)</span>
+</label>
+<div id="resumeFileList" class="file-list"></div> <label>Other Documents</label>
+<input type="file" id="otherFiles" class="upload-input" multiple>
+<label for="otherFiles" id="otherDocsLabel" class="upload-label">
+  <span id="otherDocsText">Click to Select Certificates / ID Proof</span>
+</label>
+<div id="otherFileList" class="file-list"></div> <button type="submit" id="submitBtn" class="submit-btn">
+  <div class="spinner"></div>
+  <span id="submitBtnText">Submit Application</span>
+</button>
+
+</form>
+
+<div id="successState">
+  <div class="success-icon">✅</div>
+  <h2>Application Submitted!</h2>
+  <p>Thank you for applying. We have securely received your details and documents. Our HR team will review your profile shortly.</p>
+</div>
+
+<div class="footer">Powered by DocCollect</div>
+
+</div>
+
+<script>
+
+let supabaseClient = null;
+let companyKey = null;
+let tenantId = null;
+const STORAGE_BUCKET = "candidate-files";
+const FORM_COOLDOWN_MS = 15000;
+const MAX_RESUME_SIZE_BYTES = 5 * 1024 * 1024;
+const MAX_SUPPORTING_FILE_SIZE_BYTES = 5 * 1024 * 1024;
+const MAX_SUPPORTING_FILES = 5;
+const SUBMIT_COOLDOWN_KEY = "doccollect-submit-cooldown";
+
+/* ============================= */
+/* Branding Loader */
+/* ============================= */
+
+/* ============================= */
+/* Branding Loader (Inline Config) */
+/* ============================= */
+
+async function loadBranding(){
+  const params = new URLSearchParams(window.location.search);
+  
+  // Defaults to EassyonboardLLP if no company parameter is in the URL
+  companyKey = params.get("company") || "EassyonboardLLP";
+
+  // Define the configurations directly here instead of fetching a file
+  const companies = {
+    "EassyonboardLLP": {
+      "companyName": "Eassyonboard LLP",
+      "formTitle": "Candidate Application Form",
+      "logoUrl": "assets/eassyonboard-logo.png",
+      "primaryColor": "#1d4ed8",
+      "jobConfig": {
+        "type": "dropdown",
+        "jobs": [
+          { "title": "Senior Financial Analyst (FP&A)", "active": true },
+          { "title": "SOX Compliance Consultant", "active": true }
+        ]
+      }
+    },
+    "arena": {
+      "companyName": "The Arena Group",
+      "formTitle": "Career Application",
+      "logoUrl": "assets/arena-logo.png",
+      "primaryColor": "#2563eb",
+      "jobConfig": {
+        "type": "hidden",
+        "fixedValue": "WordPress Developer"
+      }
+    }
+  };
+
+  const config = companies[companyKey];
+
+  if(!config) {
+    document.getElementById("companyName").textContent = "Company Not Found";
+    document.getElementById("formTitle").textContent = "Please check your link";
+    return;
+  }
+
+  document.getElementById("companyName").textContent = config.companyName;
+  document.getElementById("formTitle").textContent = config.formTitle;
+
+  if(config.logoUrl){
+    document.getElementById("brandLogo").innerHTML = `<img src="${config.logoUrl}" alt="Company Logo">`;
+  }
+
+  document.documentElement.style.setProperty('--primary-color', config.primaryColor);
+  document.documentElement.style.setProperty('--primary-hover', config.primaryColor); 
+  document.documentElement.style.setProperty('--ring', config.primaryColor + '33'); 
+
+  tenantId = window.APP_CONFIG.TENANT_ID;
+  supabaseClient = window.supabase.createClient(
+    window.APP_CONFIG.SUPABASE_URL,
+    window.APP_CONFIG.SUPABASE_ANON_KEY
+  );
+
+  loadJobField(config);
+}
+
+loadBranding();
+
+/* ============================= */
+/* Job Field Engine */
+/* ============================= */
+
+function loadJobField(config){
+  const jobContainer=document.getElementById("jobContainer");
+  if(!config.jobConfig) return;
+
+  const type=config.jobConfig.type;
+
+  if(type==="dropdown"){
+    jobContainer.innerHTML="<label>Applying For *</label>";
+    const select=document.createElement("select");
+    select.name="role";
+    select.required=true;
+
+    const def=document.createElement("option");
+    def.value="";
+    def.textContent="Select Position";
+    select.appendChild(def);
+
+    config.jobConfig.jobs
+      .filter(j=>j.active)
+      .forEach(job=>{
+        const opt=document.createElement("option");
+        opt.value=job.title;
+        opt.textContent=job.title;
+        select.appendChild(opt);
+      });
+
+    jobContainer.appendChild(select);
+  }
+  else if(type==="text"){
+    jobContainer.innerHTML=`
+      <label>Applying For *</label>
+      <input type="text" name="role" placeholder="e.g. Software Engineer" required>
+    `;
+  }
+  else if(type==="hidden"){
+    const hidden=document.createElement("input");
+    hidden.type="hidden";
+    hidden.name="role";
+    hidden.value=config.jobConfig.fixedValue;
+    jobContainer.appendChild(hidden);
+
+    jobContainer.innerHTML+=`
+      <label>Applying For</label>
+      <input type="text" value="${config.jobConfig.fixedValue}" disabled>
+    `;
+  }
+}
+
+/* ============================= */
+/* Fresher + Experience Logic */
+/* ============================= */
+
+function toggleFresher(){
+  const exp=document.getElementById("experience").value;
+  const section=document.getElementById("professionalSection");
+
+  if(exp==="Fresher"){
+    section.style.opacity=".4";
+    section.style.pointerEvents="none";
+    section.querySelectorAll("input,select").forEach(i => {
+      i.value = "";
+      i.disabled = true;
+    });
+  } else {
+    section.style.opacity="1";
+    section.style.pointerEvents="auto";
+    section.querySelectorAll("input,select").forEach(i => {
+      i.disabled = false;
+    });
+  }
+}
+
+function handleExperienceChange() {
+
+  const exp = document.getElementById("experience").value;
+  const custom = document.getElementById("experienceCustom");
+
+  if (exp === "Above 2") {
+    custom.style.display = "block";
+  } else {
+    custom.style.display = "none";
+    custom.value = "";
+  }
+
+  toggleFresher();
+}
+
+document.getElementById("experience").addEventListener("change",handleExperienceChange);
+handleExperienceChange();
+
+/* ============================= */
+/* File UI */
+/* ============================= */
+
+function simulateFileAttachment(files, listElementId, labelBoxId, labelTextId, emptyText) {
+  const listElement = document.getElementById(listElementId);
+  const labelBox = document.getElementById(labelBoxId);
+  const labelText = document.getElementById(labelTextId);
+  
+  listElement.innerHTML = '';
+  
+  if (!files || files.length === 0) {
+    labelText.textContent = emptyText;
+    labelBox.classList.remove("has-file");
+    return;
+  }
+  
+  labelText.textContent = "Click to Change File(s)";
+  labelBox.classList.add("has-file");
+  
+  Array.from(files).forEach(file => {
+    const item = document.createElement('div');
+    item.className = 'file-item';
+    
+    item.innerHTML = `<span>⏳ Processing file...</span> <span style="opacity:0.7;">${file.name}</span>`;
+    listElement.appendChild(item);
+    
+    setTimeout(() => {
+      item.classList.add('success');
+      item.innerHTML = `<span>✅ Attached</span> <span style="font-weight:600;">${file.name}</span>`;
+    }, 600); 
+  });
+}
+
+document.getElementById("resumeFile").addEventListener("change", function() {
+  simulateFileAttachment(this.files, "resumeFileList", "resumeLabel", "resumeText", "Click to Select Resume (PDF)");
+});
+
+document.getElementById("otherFiles").addEventListener("change", function() {
+  simulateFileAttachment(this.files, "otherFileList", "otherDocsLabel", "otherDocsText", "Click to Select Certificates / ID Proof");
+});
+
+/* ============================= */
+/* Submit Handler */
+/* ============================= */
+
+document.getElementById("docCollectForm").addEventListener("submit",async function(e){
+  e.preventDefault();
+
+  if(!supabaseClient || !tenantId) return alert("Configuration not loaded.");
+
+  const form = document.getElementById("docCollectForm");
+  const submitBtn = document.getElementById("submitBtn");
+  const submitBtnText = document.getElementById("submitBtnText");
+
+  submitBtn.disabled = true;
+  submitBtn.classList.add("loading");
+  submitBtnText.textContent = "Uploading & Submitting...";
+
+  if (getCooldownRemaining() > 0) {
+    alert("Please wait a few seconds before submitting again.");
+    submitBtn.disabled = false;
+    submitBtn.classList.remove("loading");
+    submitBtnText.textContent = "Submit Application";
+    return;
+  }
+
+  const cleanedPhone = cleanPhone(form.phone.value);
+  if (cleanedPhone.length < 10) {
+    alert("Enter valid number");
+    submitBtn.disabled = false;
+    submitBtn.classList.remove("loading");
+    submitBtnText.textContent = "Submit Application";
+    return;
+  }
+
+  // ✅ FIXED EXPERIENCE LOGIC
+  let experienceValue = form.experience.value;
+
+  if (experienceValue === "Above 2") {
+    const customVal = document.getElementById("experienceCustom").value;
+
+    if (!customVal || Number(customVal) <= 2) {
+      alert("Enter valid experience above 2 years");
+      submitBtn.disabled = false;
+      submitBtn.classList.remove("loading");
+      submitBtnText.textContent = "Submit Application";
+      return;
+    }
+
+    experienceValue = customVal;
+  }
+
+  try {
+    const candidateId = randomUuid();
+    const resumeFile = document.getElementById("resumeFile").files[0];
+
+    if (!resumeFile) {
+      throw new Error("Resume is required");
+    }
+
+    if (resumeFile.type !== "application/pdf") {
+      throw new Error("Resume must be a PDF");
+    }
+
+    if (resumeFile.size > MAX_RESUME_SIZE_BYTES) {
+      throw new Error("Resume file is too large");
+    }
+
+    const resumeStoragePath = await uploadFile(resumeFile, "resume", candidateId);
+    const otherFiles = Array.from(document.getElementById("otherFiles").files || []);
+
+    if (otherFiles.length > MAX_SUPPORTING_FILES) {
+      throw new Error("Too many supporting files");
+    }
+
+    const docs = [];
+
+    for (const file of otherFiles) {
+      if (file.size > MAX_SUPPORTING_FILE_SIZE_BYTES) {
+        throw new Error(`File too large: ${file.name}`);
+      }
+
+      const storagePath = await uploadFile(file, "supporting", candidateId);
+      docs.push({
+        id: randomUuid(),
+        tenant_id: tenantId,
+        candidate_id: candidateId,
+        kind: "supporting",
+        file_name: file.name,
+        storage_bucket: STORAGE_BUCKET,
+        storage_path: storagePath,
+        mime_type: file.type || null,
+        file_size: file.size || 0
+      });
+    }
+
+    const candidatePayload = {
+      id: candidateId,
+      tenant_id: tenantId,
+      name: sanitizeText(form.name.value, 120),
+      email: sanitizeText(form.email.value, 150).toLowerCase(),
+      phone: cleanedPhone,
+      role: sanitizeText(form.role.value, 120),
+      experience_text: experienceValue,
+      location: sanitizeText(form.location.value, 150),
+      resume_storage_path: resumeStoragePath,
+      status: "new",
+      applied_at: new Date().toISOString(),
+      current_ctc: parseCompensation(form.current_ctc.value),
+      expected_ctc: parseCompensation(form.expected_ctc.value),
+      notice_period: form.notice_period.value || null
+    };
+
+    const { data: insertedCandidate, error: candidateError } = await supabaseClient
+      .from("candidates")
+      .insert([candidatePayload])
+      .select("id")
+      .single();
+
+    if (candidateError) throw candidateError;
+
+    const persistedCandidateId = insertedCandidate?.id || candidateId;
+
+    const documentRows = [{
+      id: randomUuid(),
+      tenant_id: tenantId,
+      candidate_id: persistedCandidateId,
+      kind: "resume",
+      file_name: resumeFile.name,
+      storage_bucket: STORAGE_BUCKET,
+      storage_path: resumeStoragePath,
+      mime_type: resumeFile.type || null,
+      file_size: resumeFile.size || 0
+    }, ...docs];
+
+    const { error: docsError } = await supabaseClient
+      .from("candidate_documents")
+      .insert(documentRows);
+
+    if (docsError) throw docsError;
+
+    startSubmitCooldown();
+
+    document.getElementById("docCollectForm").style.display = "none";
+    document.getElementById("successState").style.display = "block";
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+
+  }
+  catch(err){
+    alert(err.message || "Upload failed");
+    submitBtn.disabled = false;
+    submitBtn.classList.remove("loading");
+    submitBtnText.textContent = "Submit Application";
+  } 
+});
+
+/* ============================= */
+
+function randomUuid(){
+  if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0;
+    const v = c === "x" ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
+
+function sanitizeText(value, maxLength = 200) {
+  return String(value || "")
+    .replace(/[<>]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, maxLength);
+}
+
+function getCooldownRemaining() {
+  const until = Number(window.sessionStorage.getItem(SUBMIT_COOLDOWN_KEY) || 0);
+  return Math.max(0, until - Date.now());
+}
+
+function startSubmitCooldown() {
+  window.sessionStorage.setItem(SUBMIT_COOLDOWN_KEY, String(Date.now() + FORM_COOLDOWN_MS));
+}
+
+function parseCompensation(value) {
+  if (!value) return null;
+
+  const normalized = String(value).trim().toLowerCase().replace(/,/g, '');
+  const number = parseFloat(normalized);
+
+  if (Number.isNaN(number)) return null;
+  return number;
+}
+
+async function uploadFile(file, type, candidateId) {
+  const safeName = String(file.name || "document")
+    .replace(/[^a-zA-Z0-9._-]/g, "-")
+    .replace(/-+/g, "-");
+  const path = `${tenantId}/${candidateId}/${type}/${Date.now()}-${safeName}`;
+
+  const { error } = await supabaseClient.storage
+    .from(STORAGE_BUCKET)
+    .upload(path, file);
+
+  if (error) throw error;
+
+  return path;
+}
+
+function cleanPhone(value){
+  if(!value) return '';
+  let phone = value.replace(/\D/g,'');
+  return phone.slice(-10);
+}
+
+</script>
+</body>
+</html>
