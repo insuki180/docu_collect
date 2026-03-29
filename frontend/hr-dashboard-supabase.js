@@ -471,12 +471,7 @@
     try {
       const { error } = await supabaseClient.rpc("update_candidate_status", {
         p_candidate_id: currentId,
-        p_new_status: toDbStatus(targetStatus),
-        p_subject: null,
-        p_body_html: null,
-        p_recipient_email: null,
-        p_submission_id: null,
-        p_template_id: null
+        p_new_status: toDbStatus(targetStatus)
       });
 
       if (error) throw error;
