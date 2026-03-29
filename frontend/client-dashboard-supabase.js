@@ -4,10 +4,13 @@
   const TENANT_ID = window.APP_CONFIG.TENANT_ID;
   const STORAGE_BUCKET = "candidate-files";
   const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const PAGE_SIZE = 20;
 
   const clientKey = document.body.dataset.clientKey || new URLSearchParams(window.location.search).get("client") || "";
   let allData = [];
   let clientRecord = null;
+  let currentPage = 0;
+  let totalCount = 0;
 
   function toUiStatus(value) {
     const raw = String(value || "").trim().toLowerCase();
@@ -74,7 +77,7 @@
   async function loadClientCandidates() {
     if (!clientRecord?.id) throw new Error("Client not loaded");
 
-    const { data, error } = await supabaseClient
+    const { data, error, count } = await supabaseClient
       .from("client_submissions")
       .select(`
         id,
@@ -85,12 +88,19 @@
         candidate_applied_at,
         resume_storage_path,
         status
-      `)
+      `, { count: "exact" })
       .eq("tenant_id", TENANT_ID)
       .eq("client_id", clientRecord.id)
-      .order("candidate_applied_at", { ascending: false });
+      .order("candidate_applied_at", { ascending: false })
+      .range(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE - 1);
 
     if (error) throw error;
+    totalCount = count || 0;
+
+    if (totalCount > 0 && currentPage * PAGE_SIZE >= totalCount) {
+      currentPage = Math.max(0, Math.ceil(totalCount / PAGE_SIZE) - 1);
+      return loadClientCandidates();
+    }
 
     const rows = [];
 
@@ -109,6 +119,31 @@
     }
 
     return sortCandidates(rows);
+  }
+
+  function updatePaginationUi(filteredCount = null) {
+    const pageInfo = document.getElementById("pageInfo");
+    const prevBtn = document.getElementById("prevBtn");
+    const nextBtn = document.getElementById("nextBtn");
+    const effectiveCount = typeof filteredCount === "number" ? filteredCount : totalCount;
+
+    if (pageInfo) {
+      if (effectiveCount === 0) {
+        pageInfo.innerText = "Showing 0 of 0";
+      } else {
+        const start = currentPage * PAGE_SIZE + 1;
+        const end = Math.min((currentPage + 1) * PAGE_SIZE, effectiveCount);
+        pageInfo.innerText = `Showing ${start}-${end} of ${effectiveCount}`;
+      }
+    }
+
+    if (prevBtn) {
+      prevBtn.disabled = currentPage === 0;
+    }
+
+    if (nextBtn) {
+      nextBtn.disabled = (currentPage + 1) * PAGE_SIZE >= effectiveCount;
+    }
   }
 
   window.populateRoles = function populateRoles(data) {
@@ -146,12 +181,14 @@
   window.refreshData = async function refreshData() {
     const tbody = document.getElementById("rows");
     tbody.innerHTML = `<tr><td colspan="6">Refreshing...</td></tr>`;
+    updatePaginationUi(0);
 
     try {
       allData = await loadClientCandidates();
       window.applyFilters();
     } catch (err) {
       tbody.innerHTML = `<tr><td colspan="6">Failed to refresh</td></tr>`;
+      updatePaginationUi(0);
     }
   };
 
@@ -161,6 +198,7 @@
 
     if (data.length === 0) {
       tbody.innerHTML = `<tr><td colspan="6">No candidates</td></tr>`;
+      updatePaginationUi(0);
       return;
     }
 
@@ -187,6 +225,20 @@
         </tr>
       `;
     });
+
+    updatePaginationUi(data.length);
+  };
+
+  window.nextPage = async function nextPage() {
+    if ((currentPage + 1) * PAGE_SIZE >= totalCount) return;
+    currentPage += 1;
+    await window.refreshData();
+  };
+
+  window.prevPage = async function prevPage() {
+    if (currentPage === 0) return;
+    currentPage -= 1;
+    await window.refreshData();
   };
 
   window.update = async function update(subId, candId, status, btn) {

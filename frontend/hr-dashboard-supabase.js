@@ -14,6 +14,9 @@
   let currentTemplateId = null;
   let appConfig = {};
   let statusUpdateInFlight = false;
+  let currentPage = 0;
+  let totalCount = 0;
+  const PAGE_SIZE = 20;
   const EMAIL_SUBJECT_MAX_LENGTH = 180;
   const EMAIL_BODY_MAX_LENGTH = 100000;
 
@@ -148,7 +151,11 @@
   }
 
   async function loadCandidates() {
-    const { data: candidates, error } = await supabaseClient
+    const searchTerm = (document.getElementById("searchInput")?.value || "").trim();
+    const statusFilter = document.getElementById("statusFilter")?.value || "All";
+    const roleFilter = document.getElementById("roleFilter")?.value || "All";
+
+    let query = supabaseClient
       .from("candidates")
       .select(`
         id,
@@ -164,11 +171,34 @@
         current_ctc,
         expected_ctc,
         notice_period
-      `)
+      `, { count: "exact" })
       .eq("tenant_id", TENANT_ID)
       .order("applied_at", { ascending: false });
 
+    if (searchTerm) {
+      const escaped = searchTerm.replace(/[%_,]/g, "");
+      query = query.or(`name.ilike.%${escaped}%,role.ilike.%${escaped}%,location.ilike.%${escaped}%`);
+    }
+
+    if (statusFilter !== "All") {
+      query = query.eq("status", toDbStatus(statusFilter));
+    }
+
+    if (roleFilter !== "All") {
+      query = query.eq("role", roleFilter);
+    }
+
+    query = query.range(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE - 1);
+
+    const { data: candidates, error, count } = await query;
+
     if (error) throw error;
+    totalCount = count || 0;
+
+    if (totalCount > 0 && currentPage * PAGE_SIZE >= totalCount) {
+      currentPage = Math.max(0, Math.ceil(totalCount / PAGE_SIZE) - 1);
+      return loadCandidates();
+    }
 
     const candidateIds = (candidates || []).map((c) => c.id);
     let docs = [];
@@ -226,9 +256,39 @@
     return rows;
   }
 
+  function updatePaginationUi() {
+    const pageInfo = document.getElementById("pageInfo");
+    const prevBtn = document.getElementById("prevBtn");
+    const nextBtn = document.getElementById("nextBtn");
+
+    if (pageInfo) {
+      if (totalCount === 0) {
+        pageInfo.innerText = "Showing 0-0 of 0";
+      } else {
+        const start = currentPage * PAGE_SIZE + 1;
+        const end = Math.min((currentPage + 1) * PAGE_SIZE, totalCount);
+        pageInfo.innerText = `Showing ${start}-${end} of ${totalCount}`;
+      }
+    }
+
+    if (prevBtn) {
+      prevBtn.disabled = currentPage === 0;
+    }
+
+    if (nextBtn) {
+      nextBtn.disabled = (currentPage + 1) * PAGE_SIZE >= totalCount;
+    }
+
+    console.log({
+      page: currentPage,
+      start: currentPage * PAGE_SIZE
+    });
+  }
+
   async function refreshCandidates() {
     allCandidates = await loadCandidates();
     window.populateRoles(allCandidates);
+    updatePaginationUi();
   }
 
   async function previewEmail(candidateId, status) {
@@ -346,28 +406,24 @@
     }));
   }
 
-  window.applyFilters = function applyFilters() {
-    const searchTerm = document.getElementById("searchInput").value.toLowerCase();
-    const statusFilter = document.getElementById("statusFilter").value;
-    const roleFilter = document.getElementById("roleFilter").value;
+  window.applyFilters = async function applyFilters() {
+    currentPage = 0;
+    await refreshCandidates();
+    window.renderDashboard(allCandidates);
+  };
 
-    const filtered = allCandidates.filter((c) => {
-      const name = (c.name || "").toLowerCase();
-      const role = (c.role || "").toLowerCase();
-      const location = (c.location || "").toLowerCase();
+  window.nextPage = async function nextPage() {
+    if ((currentPage + 1) * PAGE_SIZE >= totalCount) return;
+    currentPage += 1;
+    await refreshCandidates();
+    window.renderDashboard(allCandidates);
+  };
 
-      const matchesSearch =
-        name.includes(searchTerm) ||
-        role.includes(searchTerm) ||
-        location.includes(searchTerm);
-
-      const matchesStatus = statusFilter === "All" || c.status === statusFilter;
-      const matchesRole = roleFilter === "All" || c.role === roleFilter;
-
-      return matchesSearch && matchesStatus && matchesRole;
-    });
-
-    window.renderDashboard(filtered);
+  window.prevPage = async function prevPage() {
+    if (currentPage === 0) return;
+    currentPage -= 1;
+    await refreshCandidates();
+    window.renderDashboard(allCandidates);
   };
 
   window.renderDashboard = function renderDashboard(data) {
