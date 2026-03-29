@@ -459,13 +459,33 @@
   window.confirmUpdate = async function confirmUpdate() {
     if (statusUpdateInFlight) return;
 
+    const confirmBtn = document.querySelector("#confirmBtn");
+    const modal = document.getElementById("emailModal");
+    const actionText = {
+      Selected: "Selecting...",
+      Rejected: "Rejecting...",
+      Interviewed: "Updating..."
+    };
+
+    if (confirmBtn) {
+      confirmBtn.disabled = true;
+      confirmBtn.innerText = actionText[targetStatus] || "Updating status & sending email...";
+    }
+
+    document.querySelectorAll(".btn").forEach((btn) => {
+      btn.disabled = true;
+    });
+
     const toggle = document.getElementById("sendToggle").checked;
     const sub = sanitizeEmailContent(document.getElementById("sub").value, EMAIL_SUBJECT_MAX_LENGTH);
     const body = sanitizeEmailContent(document.getElementById("body").value, EMAIL_BODY_MAX_LENGTH);
     const candidate = allCandidates.find((c) => c.candidate_id === currentId);
 
-    document.getElementById("emailModal").style.display = "none";
+    if (modal) {
+      modal.style.display = "none";
+    }
     document.getElementById("rows").style.opacity = "0.5";
+    document.getElementById("rows").style.pointerEvents = "none";
     statusUpdateInFlight = true;
 
     try {
@@ -506,6 +526,16 @@
     } finally {
       statusUpdateInFlight = false;
       document.getElementById("rows").style.opacity = "1";
+      document.getElementById("rows").style.pointerEvents = "auto";
+
+      if (confirmBtn) {
+        confirmBtn.disabled = false;
+        confirmBtn.innerText = "Confirm";
+      }
+
+      document.querySelectorAll(".btn").forEach((btn) => {
+        btn.disabled = false;
+      });
     }
   };
 
