@@ -16,6 +16,12 @@
   let statusUpdateInFlight = false;
   let currentPage = 0;
   let totalCount = 0;
+  let filteredSummary = {
+    total: 0,
+    interviewed: 0,
+    selected: 0,
+    rejected: 0
+  };
   const PAGE_SIZE = 20;
   const EMAIL_SUBJECT_MAX_LENGTH = 180;
   const EMAIL_BODY_MAX_LENGTH = 100000;
@@ -256,6 +262,73 @@
     return rows;
   }
 
+  function buildCandidateCountQuery(statusOverride = null) {
+    const searchTerm = (document.getElementById("searchInput")?.value || "").trim();
+    const statusFilter = document.getElementById("statusFilter")?.value || "All";
+    const roleFilter = document.getElementById("roleFilter")?.value || "All";
+
+    let query = supabaseClient
+      .from("candidates")
+      .select("id", { count: "exact", head: true })
+      .eq("tenant_id", TENANT_ID);
+
+    if (searchTerm) {
+      const escaped = searchTerm.replace(/[%_,]/g, "");
+      query = query.or(`name.ilike.%${escaped}%,role.ilike.%${escaped}%,location.ilike.%${escaped}%`);
+    }
+
+    if (roleFilter !== "All") {
+      query = query.eq("role", roleFilter);
+    }
+
+    if (statusOverride) {
+      query = query.eq("status", statusOverride);
+    } else if (statusFilter !== "All") {
+      query = query.eq("status", toDbStatus(statusFilter));
+    }
+
+    return query;
+  }
+
+  async function loadFilteredSummary() {
+    const selectedStatus = document.getElementById("statusFilter")?.value || "All";
+
+    const totalPromise = buildCandidateCountQuery();
+
+    const interviewedPromise =
+      selectedStatus !== "All" && selectedStatus !== "Interviewed"
+        ? Promise.resolve({ count: 0, error: null })
+        : buildCandidateCountQuery("interviewed");
+
+    const selectedPromise =
+      selectedStatus !== "All" && selectedStatus !== "Selected"
+        ? Promise.resolve({ count: 0, error: null })
+        : buildCandidateCountQuery("selected");
+
+    const rejectedPromise =
+      selectedStatus !== "All" && selectedStatus !== "Rejected"
+        ? Promise.resolve({ count: 0, error: null })
+        : buildCandidateCountQuery("rejected");
+
+    const [totalRes, interviewedRes, selectedRes, rejectedRes] = await Promise.all([
+      totalPromise,
+      interviewedPromise,
+      selectedPromise,
+      rejectedPromise
+    ]);
+
+    [totalRes, interviewedRes, selectedRes, rejectedRes].forEach((result) => {
+      if (result?.error) throw result.error;
+    });
+
+    filteredSummary = {
+      total: totalRes.count || 0,
+      interviewed: interviewedRes.count || 0,
+      selected: selectedRes.count || 0,
+      rejected: rejectedRes.count || 0
+    };
+  }
+
   function updatePaginationUi() {
     const pageInfo = document.getElementById("pageInfo");
     const prevBtn = document.getElementById("prevBtn");
@@ -286,6 +359,7 @@
   }
 
   async function refreshCandidates() {
+    await loadFilteredSummary();
     allCandidates = await loadCandidates();
     window.populateRoles(allCandidates);
     updatePaginationUi();
@@ -427,10 +501,10 @@
   };
 
   window.renderDashboard = function renderDashboard(data) {
-    document.getElementById("kpi-total").innerText = allCandidates.length;
-    document.getElementById("kpi-interviewed").innerText = allCandidates.filter((c) => c.status === "Interviewed").length;
-    document.getElementById("kpi-selected").innerText = allCandidates.filter((c) => c.status === "Selected").length;
-    document.getElementById("kpi-rejected").innerText = allCandidates.filter((c) => c.status === "Rejected").length;
+    document.getElementById("kpi-total").innerText = filteredSummary.total;
+    document.getElementById("kpi-interviewed").innerText = filteredSummary.interviewed;
+    document.getElementById("kpi-selected").innerText = filteredSummary.selected;
+    document.getElementById("kpi-rejected").innerText = filteredSummary.rejected;
 
     const tbody = document.getElementById("rows");
     tbody.innerHTML = "";
