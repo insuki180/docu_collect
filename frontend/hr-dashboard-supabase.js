@@ -22,6 +22,7 @@
     selected: 0,
     rejected: 0
   };
+  let clientRecords = [];
   const PAGE_SIZE = 20;
   const EMAIL_SUBJECT_MAX_LENGTH = 180;
   const EMAIL_BODY_MAX_LENGTH = 100000;
@@ -80,6 +81,58 @@
     return String(value || "").trim().slice(0, maxLength);
   }
 
+  function slugifyClientKey(value) {
+    return String(value || "")
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 60);
+  }
+
+  function buildClientDashboardUrl(clientKey) {
+    if (!clientKey) return "";
+    const url = new URL("client_dashboard.html", window.location.href);
+    url.searchParams.set("client", clientKey);
+    return url.toString();
+  }
+
+  function updateNewClientLinkPreview() {
+    const keyInput = document.getElementById("newClientKey");
+    const linkEl = document.getElementById("newClientLink");
+    if (!keyInput || !linkEl) return;
+
+    const key = slugifyClientKey(keyInput.value);
+    linkEl.innerText = key ? buildClientDashboardUrl(key) : "Fill the client details to generate the link";
+  }
+
+  function renderClientsList() {
+    const tbody = document.getElementById("clientsRows");
+    if (!tbody) return;
+
+    tbody.innerHTML = "";
+
+    if (!clientRecords.length) {
+      tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:20px; color:#94a3b8;">No clients added yet.</td></tr>';
+      return;
+    }
+
+    clientRecords.forEach((client) => {
+      const clientUrl = buildClientDashboardUrl(client.client_key);
+      tbody.innerHTML += `
+        <tr>
+          <td>${client.client_name}</td>
+          <td>${client.client_key}</td>
+          <td>${client.dashboard_title}</td>
+          <td>
+            <a href="${clientUrl}" target="_blank" class="btn-pdf" style="margin-right:6px;">Open</a>
+            <button class="btn" type="button" onclick="copyClientLink('${client.client_key}')">Copy</button>
+          </td>
+        </tr>
+      `;
+    });
+  }
+
   async function createSignedUrl(storagePath) {
     if (!storagePath) return "";
 
@@ -114,7 +167,7 @@
   async function loadClients() {
     const { data, error } = await supabaseClient
       .from("clients")
-      .select("id, client_name")
+      .select("id, client_name, client_key, dashboard_title, logo_url, is_active")
       .eq("tenant_id", TENANT_ID)
       .eq("is_active", true)
       .order("client_name", { ascending: true });
@@ -124,14 +177,17 @@
     const dropdown = document.getElementById("clientSelect");
     dropdown.innerHTML = `<option value="">Select Client</option>`;
     clientsById = {};
+    clientRecords = data || [];
 
-    (data || []).forEach((client) => {
+    clientRecords.forEach((client) => {
       clientsById[client.id] = client.client_name;
       const opt = document.createElement("option");
       opt.value = client.id;
       opt.textContent = client.client_name;
       dropdown.appendChild(opt);
     });
+
+    renderClientsList();
   }
 
   async function loadCandidateClientMap() {
@@ -904,14 +960,18 @@
     document.querySelector(".table-container").style.display = "block";
     document.querySelector(".kpi-grid").style.display = "grid";
     document.querySelector(".controls").style.display = "flex";
+    document.getElementById("dashboardPagination").style.display = "flex";
     document.getElementById("exportSection").style.display = "none";
+    document.getElementById("clientsSection").style.display = "none";
   };
 
   window.showExportView = function showExportView() {
     document.querySelector(".table-container").style.display = "none";
     document.querySelector(".kpi-grid").style.display = "none";
     document.querySelector(".controls").style.display = "none";
+    document.getElementById("dashboardPagination").style.display = "none";
     document.getElementById("exportSection").style.display = "block";
+    document.getElementById("clientsSection").style.display = "none";
 
     loadExportLogs()
       .then((data) => {
@@ -939,6 +999,89 @@
       .catch((err) => window.showToast(err.message || "Failed to load exports", "error"));
   };
 
+  window.showClientsView = function showClientsView() {
+    document.querySelector(".table-container").style.display = "none";
+    document.querySelector(".kpi-grid").style.display = "none";
+    document.querySelector(".controls").style.display = "none";
+    document.getElementById("dashboardPagination").style.display = "none";
+    document.getElementById("exportSection").style.display = "none";
+    document.getElementById("clientsSection").style.display = "block";
+    renderClientsList();
+    updateNewClientLinkPreview();
+  };
+
+  window.copyClientLink = async function copyClientLink(clientKey) {
+    const clientUrl = buildClientDashboardUrl(clientKey);
+    try {
+      await navigator.clipboard.writeText(clientUrl);
+      window.showToast("Client link copied", "success");
+    } catch (err) {
+      window.showToast("Unable to copy link", "error");
+    }
+  };
+
+  window.copyGeneratedClientLink = async function copyGeneratedClientLink() {
+    const key = slugifyClientKey(document.getElementById("newClientKey")?.value || "");
+    if (!key) {
+      window.showToast("Enter client details first", "error");
+      return;
+    }
+
+    await window.copyClientLink(key);
+  };
+
+  window.createClientDashboard = async function createClientDashboard() {
+    const btn = document.getElementById("createClientBtn");
+    const nameInput = document.getElementById("newClientName");
+    const keyInput = document.getElementById("newClientKey");
+    const titleInput = document.getElementById("newClientTitle");
+    const logoInput = document.getElementById("newClientLogo");
+
+    const clientName = String(nameInput?.value || "").trim();
+    const clientKey = slugifyClientKey(keyInput?.value || "");
+    const dashboardTitle = String(titleInput?.value || "").trim();
+    const logoUrl = String(logoInput?.value || "").trim();
+
+    if (!clientName || !clientKey || !dashboardTitle) {
+      window.showToast("Client name, key, and title are required", "error");
+      return;
+    }
+
+    btn.disabled = true;
+    btn.innerText = "Creating...";
+
+    try {
+      const { error } = await supabaseClient
+        .from("clients")
+        .insert({
+          tenant_id: TENANT_ID,
+          client_name: clientName,
+          client_key: clientKey,
+          dashboard_title: dashboardTitle,
+          logo_url: logoUrl || null,
+          is_active: true
+        });
+
+      if (error) throw error;
+
+      await loadClients();
+      await loadCandidateClientMap();
+
+      nameInput.value = "";
+      keyInput.value = "";
+      titleInput.value = "";
+      logoInput.value = "";
+      updateNewClientLinkPreview();
+
+      window.showToast("Client created", "success");
+    } catch (err) {
+      window.showToast(err.message || "Failed to create client", "error");
+    } finally {
+      btn.disabled = false;
+      btn.innerText = "Create Client";
+    }
+  };
+
   window.addEventListener("click", function (event) {
     const profile = document.getElementById("profileModal");
     const email = document.getElementById("emailModal");
@@ -949,6 +1092,33 @@
 
   window.addEventListener("load", async function () {
     window.switchView("preview");
+    const nameInput = document.getElementById("newClientName");
+    const keyInput = document.getElementById("newClientKey");
+    const titleInput = document.getElementById("newClientTitle");
+
+    if (nameInput && keyInput) {
+      nameInput.addEventListener("input", () => {
+        if (!keyInput.dataset.touched) {
+          keyInput.value = slugifyClientKey(nameInput.value);
+        }
+        if (titleInput && !titleInput.dataset.touched) {
+          titleInput.value = nameInput.value.trim() ? `${nameInput.value.trim()} Dashboard` : "";
+        }
+        updateNewClientLinkPreview();
+      });
+
+      keyInput.addEventListener("input", () => {
+        keyInput.dataset.touched = "true";
+        keyInput.value = slugifyClientKey(keyInput.value);
+        updateNewClientLinkPreview();
+      });
+    }
+
+    if (titleInput) {
+      titleInput.addEventListener("input", () => {
+        titleInput.dataset.touched = "true";
+      });
+    }
 
     try {
       await loadConfig();

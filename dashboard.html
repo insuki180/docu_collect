@@ -315,6 +315,9 @@
     <p onclick="showExportView()" style="cursor:pointer; display:flex; align-items:center; gap:10px; padding:12px 14px; border-radius:14px; margin-bottom:10px;">
       <i class="ri-share-forward-line"></i> Exports
     </p>
+    <p onclick="showClientsView()" style="cursor:pointer; display:flex; align-items:center; gap:10px; padding:12px 14px; border-radius:14px; margin-bottom:10px;">
+      <i class="ri-building-line"></i> Clients
+    </p>
     <p style="display:flex; align-items:center; gap:10px; padding:12px 14px; border-radius:14px; margin:0;"><i class="ri-settings-4-line"></i> Settings</p>
   </div>
 </div>
@@ -401,7 +404,7 @@
     </table>
   </div>
 
-  <div style="margin-top:15px; display:flex; justify-content:space-between; align-items:center;">
+  <div id="dashboardPagination" style="margin-top:15px; display:flex; justify-content:space-between; align-items:center;">
     <div id="pageInfo" style="font-size:13px; color:#64748b;"></div>
     <div style="display:flex; gap:10px;">
       <button class="btn" id="prevBtn" onclick="prevPage()">⬅ Prev</button>
@@ -425,6 +428,53 @@
         </thead>
         <tbody id="exportRows"></tbody>
       </table>
+    </div>
+  </div>
+
+  <div id="clientsSection" style="display:none; margin-top:30px;">
+    <div style="display:grid; grid-template-columns:minmax(320px, 420px) minmax(0, 1fr); gap:20px; align-items:start;">
+      <div class="table-container" style="padding:22px;">
+        <h3 style="margin:0 0 6px; font-size:20px; letter-spacing:-0.03em; color:#0f172a;">Add New Client</h3>
+        <p style="margin:0 0 18px; color:#64748b; font-size:13px;">Create a client dashboard link and immediately make the client available for exports.</p>
+
+        <label style="margin-top:0;">Client Name *</label>
+        <input id="newClientName" class="modal-input" placeholder="Arena">
+
+        <label>Client Key *</label>
+        <input id="newClientKey" class="modal-input" placeholder="arena">
+
+        <label>Dashboard Title *</label>
+        <input id="newClientTitle" class="modal-input" placeholder="Arena Dashboard">
+
+        <label>Logo URL</label>
+        <input id="newClientLogo" class="modal-input" placeholder="https://example.com/logo.png">
+
+        <div style="margin-top:12px; padding:12px 14px; border-radius:14px; background:#f8fbff; border:1px solid #dbe3ee;">
+          <div style="font-size:11px; font-weight:700; letter-spacing:.12em; color:#64748b; text-transform:uppercase; margin-bottom:6px;">Client Dashboard Link</div>
+          <div id="newClientLink" style="font-size:13px; color:#1d4ed8; word-break:break-all;">Fill the client details to generate the link</div>
+        </div>
+
+        <div style="display:flex; gap:10px; margin-top:18px;">
+          <button class="btn" id="createClientBtn" onclick="createClientDashboard()" style="background:linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); color:white; border-color:#2563eb;">Create Client</button>
+          <button class="btn" type="button" onclick="copyGeneratedClientLink()">Copy Link</button>
+        </div>
+      </div>
+
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Client</th>
+              <th>Key</th>
+              <th>Dashboard</th>
+              <th>Link</th>
+            </tr>
+          </thead>
+          <tbody id="clientsRows">
+            <tr><td colspan="4" style="text-align:center; padding:20px; color:#94a3b8;">Loading clients...</td></tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
 </div>
