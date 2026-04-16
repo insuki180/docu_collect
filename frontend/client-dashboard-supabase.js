@@ -3,6 +3,8 @@
   const SUPABASE_ANON_KEY = window.APP_CONFIG.SUPABASE_ANON_KEY;
   const TENANT_ID = window.APP_CONFIG.TENANT_ID;
   const STORAGE_BUCKET = "candidate-files";
+  const DEFAULT_CLIENT_TITLE = "Arena Dashboard";
+  const DEFAULT_CLIENT_LOGO = "assets/eassyonboard-logo.png";
   const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   const PAGE_SIZE = 20;
 
@@ -67,11 +69,21 @@
 
     clientRecord = data;
 
+    const title = data.dashboard_title || DEFAULT_CLIENT_TITLE;
+    const logo = data.logo_url || DEFAULT_CLIENT_LOGO;
     const nameEl = document.getElementById("companyName");
     const logoEl = document.getElementById("companyLogo");
+    const visibleNameEl = document.getElementById("visibleCompanyName");
+    const visibleLogoEl = document.getElementById("visibleCompanyLogo");
+    const faviconEl = document.getElementById("appFavicon");
 
-    if (nameEl) nameEl.innerText = data.dashboard_title || "Client Dashboard";
-    if (logoEl && data.logo_url) logoEl.src = data.logo_url;
+    document.title = title;
+
+    if (nameEl) nameEl.innerText = title;
+    if (visibleNameEl) visibleNameEl.innerText = title;
+    if (logoEl) logoEl.src = logo;
+    if (visibleLogoEl) visibleLogoEl.src = logo;
+    if (faviconEl) faviconEl.href = logo;
   }
 
   async function loadClientCandidates() {
