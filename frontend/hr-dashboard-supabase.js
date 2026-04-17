@@ -4,6 +4,13 @@
   const TENANT_ID = window.APP_CONFIG.TENANT_ID;
   const STORAGE_BUCKET = "candidate-files";
   const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const DEFAULT_FILTERS = {
+    search: "",
+    status: "All",
+    role: "All",
+    experiences: ["__all__"],
+    sort: "newest"
+  };
 
   let allCandidates = [];
   let candidateClientMap = {};
@@ -23,6 +30,10 @@
     rejected: 0
   };
   let clientRecords = [];
+  let availableRoles = [];
+  let availableExperiences = [];
+  let draftFilters = { ...DEFAULT_FILTERS };
+  let appliedFilters = { ...DEFAULT_FILTERS };
   const PAGE_SIZE = 20;
   const EMAIL_SUBJECT_MAX_LENGTH = 180;
   const EMAIL_BODY_MAX_LENGTH = 100000;
@@ -47,6 +58,27 @@
   function formatExperience(value) {
     if (value === null || value === undefined) return "";
     return String(value);
+  }
+
+  function parseExperienceValue(value) {
+    const text = String(value || "").trim().toLowerCase();
+    const matches = text.match(/(\d+(\.\d+)?)/g);
+    if (!matches || matches.length === 0) return 0;
+    return Math.max(...matches.map(Number));
+  }
+
+  function normalizeExperienceSelection(values) {
+    if (!Array.isArray(values) || values.length === 0 || values.includes("__all__")) {
+      return ["__all__"];
+    }
+    return [...new Set(values)];
+  }
+
+  function getExperienceButtonLabel(values) {
+    const normalized = normalizeExperienceSelection(values);
+    if (normalized.includes("__all__")) return "Experience: All";
+    if (normalized.length === 1) return `Experience: ${normalized[0]}`;
+    return `Experience: ${normalized.length} selected`;
   }
 
   function formatCtc(value) {
@@ -104,6 +136,137 @@
 
     const key = slugifyClientKey(keyInput.value);
     linkEl.innerText = key ? buildClientDashboardUrl(key) : "Fill the client details to generate the link";
+  }
+
+  function renderRoleOptions() {
+    const roleFilter = document.getElementById("roleFilter");
+    if (!roleFilter) return;
+
+    const currentValue = roleFilter.value || draftFilters.role || "All";
+    roleFilter.innerHTML = '<option value="All">All Roles</option>';
+
+    availableRoles.forEach((role) => {
+      const opt = document.createElement("option");
+      opt.value = role;
+      opt.textContent = role;
+      roleFilter.appendChild(opt);
+    });
+
+    roleFilter.value = availableRoles.includes(currentValue) ? currentValue : "All";
+  }
+
+  function readExperienceSelections() {
+    const inputs = [...document.querySelectorAll('#experienceFilterMenu input[type="checkbox"]')];
+    const values = inputs.filter((input) => input.checked).map((input) => input.value);
+    return normalizeExperienceSelection(values);
+  }
+
+  function writeExperienceSelections(values) {
+    const normalized = normalizeExperienceSelection(values);
+    const inputs = [...document.querySelectorAll('#experienceFilterMenu input[type="checkbox"]')];
+    inputs.forEach((input) => {
+      if (input.value === "__all__") {
+        input.checked = normalized.includes("__all__");
+      } else {
+        input.checked = !normalized.includes("__all__") && normalized.includes(input.value);
+      }
+    });
+
+    const button = document.getElementById("experienceFilterButton");
+    if (button) {
+      button.textContent = getExperienceButtonLabel(normalized);
+    }
+  }
+
+  function renderExperienceOptions() {
+    const container = document.getElementById("experienceOptions");
+    if (!container) return;
+
+    container.innerHTML = "";
+    availableExperiences.forEach((value) => {
+      const label = document.createElement("label");
+      label.className = "filter-check";
+      label.innerHTML = `<input type="checkbox" value="${value}"><span>${value}</span>`;
+      container.appendChild(label);
+    });
+
+    writeExperienceSelections(draftFilters.experiences);
+  }
+
+  function writeFiltersToControls(filters) {
+    const normalized = { ...filters, experiences: normalizeExperienceSelection(filters.experiences) };
+    const searchInput = document.getElementById("searchInput");
+    const statusFilter = document.getElementById("statusFilter");
+    const roleFilter = document.getElementById("roleFilter");
+    const sortFilter = document.getElementById("sortFilter");
+
+    if (searchInput) searchInput.value = normalized.search;
+    if (statusFilter) statusFilter.value = normalized.status;
+    if (roleFilter) roleFilter.value = availableRoles.includes(normalized.role) ? normalized.role : "All";
+    if (sortFilter) sortFilter.value = normalized.sort;
+
+    writeExperienceSelections(normalized.experiences);
+  }
+
+  function syncDraftFiltersFromControls() {
+    draftFilters = {
+      search: document.getElementById("searchInput")?.value || "",
+      status: document.getElementById("statusFilter")?.value || "All",
+      role: document.getElementById("roleFilter")?.value || "All",
+      experiences: readExperienceSelections(),
+      sort: document.getElementById("sortFilter")?.value || "newest"
+    };
+  }
+
+  function applyDraftFilters() {
+    syncDraftFiltersFromControls();
+    appliedFilters = {
+      ...draftFilters,
+      experiences: normalizeExperienceSelection(draftFilters.experiences)
+    };
+    currentPage = 0;
+  }
+
+  function bindExperienceMenu() {
+    const button = document.getElementById("experienceFilterButton");
+    const menu = document.getElementById("experienceFilterMenu");
+    if (!button || !menu) return;
+
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      menu.style.display = menu.style.display === "block" ? "none" : "block";
+    });
+
+    document.addEventListener("click", (event) => {
+      if (!menu.contains(event.target) && event.target !== button) {
+        menu.style.display = "none";
+      }
+    });
+
+    menu.addEventListener("change", (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLInputElement) || target.type !== "checkbox") return;
+
+      const inputs = [...menu.querySelectorAll('input[type="checkbox"]')];
+      if (target.value === "__all__") {
+        if (target.checked) {
+          inputs.forEach((input) => {
+            if (input.value !== "__all__") input.checked = false;
+          });
+        } else if (!inputs.some((input) => input.value !== "__all__" && input.checked)) {
+          target.checked = true;
+        }
+      } else {
+        const allInput = inputs.find((input) => input.value === "__all__");
+        if (target.checked && allInput) allInput.checked = false;
+        if (!inputs.some((input) => input.value !== "__all__" && input.checked) && allInput) {
+          allInput.checked = true;
+        }
+      }
+
+      syncDraftFiltersFromControls();
+      writeExperienceSelections(readExperienceSelections());
+    });
   }
 
   function renderClientsList() {
@@ -190,6 +353,22 @@
     renderClientsList();
   }
 
+  async function loadFilterOptions() {
+    const { data, error } = await supabaseClient
+      .from("candidates")
+      .select("role, experience_text")
+      .eq("tenant_id", TENANT_ID);
+
+    if (error) throw error;
+
+    availableRoles = [...new Set((data || []).map((row) => row.role).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    availableExperiences = [...new Set((data || []).map((row) => row.experience_text).filter(Boolean))]
+      .sort((a, b) => parseExperienceValue(b) - parseExperienceValue(a) || String(a).localeCompare(String(b)));
+
+    renderRoleOptions();
+    renderExperienceOptions();
+  }
+
   async function loadCandidateClientMap() {
     const { data, error } = await supabaseClient
       .from("client_submissions")
@@ -213,9 +392,11 @@
   }
 
   async function loadCandidates() {
-    const searchTerm = (document.getElementById("searchInput")?.value || "").trim();
-    const statusFilter = document.getElementById("statusFilter")?.value || "All";
-    const roleFilter = document.getElementById("roleFilter")?.value || "All";
+    const searchTerm = appliedFilters.search.trim();
+    const statusFilter = appliedFilters.status;
+    const roleFilter = appliedFilters.role;
+    const selectedExperiences = normalizeExperienceSelection(appliedFilters.experiences);
+    const sortFilter = appliedFilters.sort;
 
     let query = supabaseClient
       .from("candidates")
@@ -251,16 +432,43 @@
       query = query.eq("role", roleFilter);
     }
 
-    query = query.range(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE - 1);
+    if (!selectedExperiences.includes("__all__")) {
+      query = query.in("experience_text", selectedExperiences);
+    }
 
-    const { data: candidates, error, count } = await query;
+    let candidates = [];
 
-    if (error) throw error;
-    totalCount = count || 0;
+    if (sortFilter === "experience_desc") {
+      const { data: sortedCandidates, error } = await query;
 
-    if (totalCount > 0 && currentPage * PAGE_SIZE >= totalCount) {
-      currentPage = Math.max(0, Math.ceil(totalCount / PAGE_SIZE) - 1);
-      return loadCandidates();
+      if (error) throw error;
+      totalCount = (sortedCandidates || []).length;
+
+      if (totalCount > 0 && currentPage * PAGE_SIZE >= totalCount) {
+        currentPage = Math.max(0, Math.ceil(totalCount / PAGE_SIZE) - 1);
+      }
+
+      candidates = [...(sortedCandidates || [])]
+        .sort((a, b) => {
+          const diff = parseExperienceValue(b.experience_text) - parseExperienceValue(a.experience_text);
+          if (diff !== 0) return diff;
+          return new Date(b.created_at || b.applied_at || 0) - new Date(a.created_at || a.applied_at || 0);
+        })
+        .slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
+    } else {
+      query = query.range(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE - 1);
+
+      const { data, error, count } = await query;
+
+      if (error) throw error;
+      totalCount = count || 0;
+
+      if (totalCount > 0 && currentPage * PAGE_SIZE >= totalCount) {
+        currentPage = Math.max(0, Math.ceil(totalCount / PAGE_SIZE) - 1);
+        return loadCandidates();
+      }
+
+      candidates = data || [];
     }
 
     const candidateIds = (candidates || []).map((c) => c.id);
@@ -285,18 +493,13 @@
       docsByCandidate[doc.candidate_id].push(doc.storage_path);
     });
 
-    const rows = [];
+    const rows = await Promise.all((candidates || []).map(async (row) => {
+      const [resumeUrl, signedSupportingDocs] = await Promise.all([
+        createSignedUrl(row.resume_storage_path),
+        Promise.all((docsByCandidate[row.id] || []).map((path) => createSignedUrl(path)))
+      ]);
 
-    for (const row of candidates || []) {
-      const resumeUrl = await createSignedUrl(row.resume_storage_path);
-      const otherDocLinks = [];
-
-      for (const path of docsByCandidate[row.id] || []) {
-        const signed = await createSignedUrl(path);
-        if (signed) otherDocLinks.push(signed);
-      }
-
-      rows.push({
+      return {
         candidate_id: row.id,
         name: row.name,
         email: row.email,
@@ -310,20 +513,21 @@
         applied_at: row.applied_at || "",
         created_at: row.created_at || "",
         applied_date: formatDisplayDate(row.applied_at),
-        other_docs: otherDocLinks.join(","),
+        other_docs: (signedSupportingDocs || []).filter(Boolean).join(","),
         current_ctc: formatCtc(row.current_ctc),
         expected_ctc: formatCtc(row.expected_ctc),
         notice_period: row.notice_period || ""
-      });
-    }
+      };
+    }));
 
     return rows;
   }
 
   function buildCandidateCountQuery(statusOverride = null) {
-    const searchTerm = (document.getElementById("searchInput")?.value || "").trim();
-    const statusFilter = document.getElementById("statusFilter")?.value || "All";
-    const roleFilter = document.getElementById("roleFilter")?.value || "All";
+    const searchTerm = appliedFilters.search.trim();
+    const statusFilter = appliedFilters.status;
+    const roleFilter = appliedFilters.role;
+    const selectedExperiences = normalizeExperienceSelection(appliedFilters.experiences);
 
     let query = supabaseClient
       .from("candidates")
@@ -339,6 +543,10 @@
       query = query.eq("role", roleFilter);
     }
 
+    if (!selectedExperiences.includes("__all__")) {
+      query = query.in("experience_text", selectedExperiences);
+    }
+
     if (statusOverride) {
       query = query.eq("status", statusOverride);
     } else if (statusFilter !== "All") {
@@ -349,7 +557,7 @@
   }
 
   async function loadFilteredSummary() {
-    const selectedStatus = document.getElementById("statusFilter")?.value || "All";
+    const selectedStatus = appliedFilters.status;
 
     const totalPromise = buildCandidateCountQuery();
 
@@ -416,10 +624,28 @@
     });
   }
 
+  function setDashboardLoadingState(message = "Loading candidates...") {
+    const tbody = document.getElementById("rows");
+    const pageInfo = document.getElementById("pageInfo");
+    const prevBtn = document.getElementById("prevBtn");
+    const nextBtn = document.getElementById("nextBtn");
+
+    if (tbody) {
+      tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:20px; color:#94a3b8;">${message}</td></tr>`;
+    }
+
+    if (pageInfo) {
+      pageInfo.innerText = "Loading...";
+    }
+
+    if (prevBtn) prevBtn.disabled = true;
+    if (nextBtn) nextBtn.disabled = true;
+  }
+
   async function refreshCandidates() {
+    setDashboardLoadingState();
     await loadFilteredSummary();
     allCandidates = await loadCandidates();
-    window.populateRoles(allCandidates);
     updatePaginationUi();
   }
 
@@ -539,7 +765,16 @@
   }
 
   window.applyFilters = async function applyFilters() {
+    applyDraftFilters();
+    await refreshCandidates();
+    window.renderDashboard(allCandidates);
+  };
+
+  window.clearFilters = async function clearFilters() {
+    draftFilters = { ...DEFAULT_FILTERS };
+    appliedFilters = { ...DEFAULT_FILTERS };
     currentPage = 0;
+    writeFiltersToControls(draftFilters);
     await refreshCandidates();
     window.renderDashboard(allCandidates);
   };
@@ -941,19 +1176,8 @@
     }, 2500);
   };
 
-  window.populateRoles = function populateRoles(data) {
-    const roleFilter = document.getElementById("roleFilter");
-    roleFilter.innerHTML = '<option value="All">All Roles</option>';
-
-    const roles = [...new Set(data.map((c) => c.role).filter(Boolean))];
-    roles.sort();
-
-    roles.forEach((role) => {
-      const opt = document.createElement("option");
-      opt.value = role;
-      opt.textContent = role;
-      roleFilter.appendChild(opt);
-    });
+  window.populateRoles = function populateRoles() {
+    renderRoleOptions();
   };
 
   window.showCandidatesView = function showCandidatesView() {
@@ -1092,6 +1316,9 @@
 
   window.addEventListener("load", async function () {
     window.switchView("preview");
+    bindExperienceMenu();
+    document.getElementById("applyFiltersBtn")?.addEventListener("click", window.applyFilters);
+    document.getElementById("clearFiltersBtn")?.addEventListener("click", window.clearFilters);
     const nameInput = document.getElementById("newClientName");
     const keyInput = document.getElementById("newClientKey");
     const titleInput = document.getElementById("newClientTitle");
@@ -1123,6 +1350,8 @@
     try {
       await loadConfig();
       await loadClients();
+      await loadFilterOptions();
+      writeFiltersToControls(draftFilters);
       await refreshCandidates();
       await loadCandidateClientMap();
       window.renderDashboard(allCandidates);
