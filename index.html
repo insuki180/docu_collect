@@ -437,7 +437,7 @@ async function loadBranding(){
         "type": "dropdown",
         "jobs": [
           { "title": "Senior Financial Analyst (FP&A)", "active": true },
-	  { "title": "Senior Data Engineer", "active": true },
+	  { "title": "Sr.Data Engineer", "active": true },
           { "title": "SOX Compliance Consultant", "active": true }
         ]
       }
@@ -515,12 +515,15 @@ function loadJobField(config){
       });
 
     jobContainer.appendChild(select);
+    select.addEventListener("change", handleRoleChange);
   }
   else if(type==="text"){
     jobContainer.innerHTML=`
       <label>Applying For *</label>
       <input type="text" name="role" placeholder="e.g. Software Engineer" required>
     `;
+    const input = jobContainer.querySelector('input[name="role"]');
+    if (input) input.addEventListener("input", handleRoleChange);
   }
   else if(type==="hidden"){
     const hidden=document.createElement("input");
@@ -534,6 +537,8 @@ function loadJobField(config){
       <input type="text" value="${config.jobConfig.fixedValue}" disabled>
     `;
   }
+
+  handleRoleChange();
 }
 
 /* ============================= */
@@ -573,6 +578,35 @@ function handleExperienceChange() {
   }
 
   toggleFresher();
+}
+
+function handleRoleChange() {
+  const roleInput = document.querySelector('[name="role"]');
+  const role = normalizeRole(roleInput ? roleInput.value : "");
+  const experienceSelect = document.getElementById("experience");
+  const custom = document.getElementById("experienceCustom");
+  if (!experienceSelect || !custom) return;
+
+  const requiresSeniorExperience = role === "Sr.Data Engineer";
+  const blockedValues = new Set(["Fresher", "0-2"]);
+
+  Array.from(experienceSelect.options).forEach((option) => {
+    if (blockedValues.has(option.value)) {
+      option.disabled = requiresSeniorExperience;
+      option.hidden = requiresSeniorExperience;
+    }
+  });
+
+  if (requiresSeniorExperience && blockedValues.has(experienceSelect.value)) {
+    experienceSelect.value = "";
+  }
+
+  custom.min = requiresSeniorExperience ? "4" : "2.1";
+  custom.placeholder = requiresSeniorExperience
+    ? "Enter exact years (minimum 4)"
+    : "Enter exact years (e.g. 3 or 4.5)";
+
+  handleExperienceChange();
 }
 
 document.getElementById("experience").addEventListener("change",handleExperienceChange);
@@ -654,6 +688,8 @@ document.getElementById("docCollectForm").addEventListener("submit",async functi
     return;
   }
 
+  const selectedRole = normalizeRole(form.role.value);
+
   // ✅ FIXED EXPERIENCE LOGIC
   let experienceValue = form.experience.value;
 
@@ -669,6 +705,15 @@ document.getElementById("docCollectForm").addEventListener("submit",async functi
     }
 
     experienceValue = customVal;
+  }
+
+  const numericExperience = Number(experienceValue);
+  if (selectedRole === "Sr.Data Engineer" && (!Number.isFinite(numericExperience) || numericExperience < 4)) {
+    alert("Sr.Data Engineer requires minimum 4 years of experience");
+    submitBtn.disabled = false;
+    submitBtn.classList.remove("loading");
+    submitBtnText.textContent = "Submit Application";
+    return;
   }
 
   try {
@@ -721,7 +766,7 @@ document.getElementById("docCollectForm").addEventListener("submit",async functi
       name: sanitizeText(form.name.value, 120),
       email: sanitizeText(form.email.value, 150).toLowerCase(),
       phone: cleanedPhone,
-      role: sanitizeText(form.role.value, 120),
+      role: selectedRole,
       experience_text: experienceValue,
       location: sanitizeText(form.location.value, 150),
       resume_storage_path: resumeStoragePath,
@@ -793,6 +838,12 @@ function sanitizeText(value, maxLength = 200) {
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, maxLength);
+}
+
+function normalizeRole(value) {
+  const cleaned = sanitizeText(value, 120);
+  if (cleaned.toLowerCase() === "senior data engineer") return "Sr.Data Engineer";
+  return cleaned;
 }
 
 function getCooldownRemaining() {
